@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import "regenerator-runtime/runtime";
 import SpeechRecognition, {
@@ -23,19 +23,14 @@ import { MdHeadphones } from "react-icons/md";
 import sound from "../assets/sound.gif";
 
 export default function Home() {
-  const [translatedText, setTranslatedText] = useState();
+  const [translatedText, setTranslatedText] = useState<string | null>();
   const [speechcompleted, setSpeechcompleted] = useState(false);
   const [translationOrder, setTranslationOrder] = useState("pt-br|en");
-  const {
-    transcript,
-    listening,
-    resetTranscript,
-    browserSupportsSpeechRecognition,
-  } = useSpeechRecognition();
+  const { transcript, listening, browserSupportsSpeechRecognition } =
+    useSpeechRecognition();
 
-  if (!browserSupportsSpeechRecognition) {
-    return <span>Browser doesn't support speech recognition.</span>;
-  }
+  const voices = window.speechSynthesis.getVoices();
+  const utterance = useMemo(() => new SpeechSynthesisUtterance(), []);
 
   const translateText = async () => {
     try {
@@ -46,7 +41,7 @@ export default function Home() {
       const data = await response.json();
 
       if (data.responseStatus === 200) {
-        speech(data.responseData.translatedText);
+        handleSpeech(data.responseData.translatedText);
       } else {
         console.error("Erro na tradução:", data.responseStatus);
       }
@@ -55,26 +50,23 @@ export default function Home() {
     }
   };
 
-  const speech = (text) => {
+  const handleSpeech = (text: string) => {
     setTranslatedText(text);
     setSpeechcompleted(true);
     if ("speechSynthesis" in window) {
-      const voices = window.speechSynthesis.getVoices();
-      var utterance = new SpeechSynthesisUtterance(text);
-
+      utterance.text = text;
       if (translationOrder === "pt-br|en") {
         const englishVoice = voices.find((voice) =>
           voice.lang.startsWith("en")
         );
-        utterance.voice = englishVoice;
+        utterance.voice = englishVoice || voices[0];
       } else {
         const portugueseVoice = voices.find((voice) =>
-          voice.lang.startsWith("en")
+          voice.lang.startsWith("pt")
         );
-        utterance.voice = portugueseVoice;
+        utterance.voice = portugueseVoice || voices[0];
       }
-      // utterance.voice = voices[5];
-      utterance.rate = 1.0;
+
       utterance.onend = () => {
         setSpeechcompleted(true);
       };
@@ -89,13 +81,17 @@ export default function Home() {
     if (listening === false) {
       translateText();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listening]);
 
-  // useEffect(() => {
-  //   if (listening === false) {
-  //     SpeechRecognition.startListening();
-  //   }
-  // }, [listening]);
+  useEffect(() => {
+    const englishVoice = voices.find((voice) => voice.lang.startsWith("en"));
+    utterance.voice = englishVoice || voices[0];
+  }, [utterance, voices]);
+
+  if (!browserSupportsSpeechRecognition) {
+    return <span>Browser doesn&apos;t support speech recognition.</span>;
+  }
 
   return (
     <Container>
@@ -140,13 +136,19 @@ export default function Home() {
       <Button
         onClick={() => {
           SpeechRecognition.startListening();
-          setTranslatedText();
+          setTranslatedText(null);
         }}
       >
         {listening && <Spinner />}
         <IoIosMic size={50} color="#FFF" />
       </Button>
-      <div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          flexDirection: "column",
+        }}
+      >
         {transcript && (
           <TextTranslation>
             <strong>Fala original:</strong> {transcript}
@@ -158,13 +160,13 @@ export default function Home() {
             <TextTranslation>
               <strong>Fala traduzida:</strong> {translatedText}
             </TextTranslation>
-            <ButtonReListen onClick={() => speech(translatedText)}>
+            <ButtonReListen onClick={() => handleSpeech(translatedText)}>
               {speechcompleted ? (
                 <TextTranslation>
                   <MdHeadphones size={20} color="#FFF" /> Ouvir novamente
                 </TextTranslation>
               ) : (
-                <Image src={sound} />
+                <Image src={sound} alt="sound image" />
               )}
             </ButtonReListen>
           </ContainerTranscription>
