@@ -95,7 +95,7 @@ export default function Home() {
 
   return (
     <Container>
-      <Title>Tradutor</Title>
+      <Title>Tradutor de fala</Title>
       {translationOrder === "pt-br|en" ? (
         <ContainerLanguage>
           <BlockLanguage>
